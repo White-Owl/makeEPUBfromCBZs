@@ -62,12 +62,13 @@ $content_writer->endTag('metadata');
 $content_writer->startTag('manifest');
 $content_writer->emptyTag('item', 'href'=>"cover.html", 'id'=>"cover", 'media-type'=>"application/xhtml+xml");
 $content_writer->emptyTag('item', 'href'=>"index.html", 'id'=>"index", 'media-type'=>"application/xhtml+xml");
-#$content_writer->emptyTag('item', 'href'=>"titlepage.html", 'id'=>"titlepage", 'media-type'=>"application/xhtml+xml");
+#$content_writer->emptyTag('item', 'href'=>"toc.html", 'id'=>"toc", 'media-type'=>"application/xhtml+xml");
 $content_writer->emptyTag('item', 'href'=>"toc.ncx", 'id'=>"ncx", 'media-type'=>"application/x-dtbncx+xml");
 
 
 
 my $index_text = "<html><head><title>$book_name</title></head><body>\n";
+my $toc_text = "<html><head><title>Table of Contents</title></head>\n<body><h3>Table of Contents</h3>\n";
 my @chapters=();
 while (defined($_ = $source_dir->read)) {
 	if(/(.+)\.cbz$/) {
@@ -86,32 +87,34 @@ foreach my $chapter_title (sort @chapters) {
 		$cover_file = $images[0];
 		$cover_folder = $chapter_folder_name;
 	}
-	$index_text .="<p>";
+
+	$index_text .="<p id=\"nav${chapter_folder_name}\">";
+	$toc_text .="<a href=\"index.html#nav${chapter_folder_name}\">$chapter_title</a><br>\n";
+	$toc_writer->startTag('navPoint', 'class'=>"chapter", 'playOrder'=>"$chapter_counter");
+	$toc_writer->startTag('navLabel');
+	$toc_writer->dataElement('text'=>$chapter_title);
+	$toc_writer->endTag('navLabel');
+	$toc_writer->emptyTag('content', 'src'=>"index.html#nav${chapter_folder_name}");
+	$toc_writer->endTag('navPoint');
+
 	my $image_counter = 0;
 	print "$chapter_title\n";
 	foreach my $img (@images) {
 		$image_counter++;
-		$index_text .= "<img src=\"$chapter_folder_name/$img\" id=\"img${chapter_folder_name}x$image_counter\"><br>\n";
+		$index_text .= "<img src=\"$chapter_folder_name/$img\">\n";
 		my $data = $chapter_cbz->contents($img);
 		$book->addString($data, "$chapter_folder_name/$img", COMPRESSION_LEVEL_BEST_COMPRESSION);
 		$img =~ /\.(.+)$/;
 		my $img_type='jpeg';
 		$img_type = 'png' if($1 eq 'png');
-		$content_writer->emptyTag('item', 'href'=>"$chapter_folder_name/$img", 'id'=>"img${chapter_counter}x${image_counter}", 'media-type'=>"image/$img_type");
-			if($image_counter==1) {
-			$toc_writer->startTag('navPoint', 'class'=>"chapter", 'id'=>"num_$chapter_counter", 'playOrder'=>"$chapter_counter");
-			$toc_writer->startTag('navLabel');
-			$toc_writer->dataElement('text'=>$chapter_title);
-			$toc_writer->endTag('navLabel');
-			$toc_writer->emptyTag('content', 'src'=>"index.html#img${chapter_folder_name}x1");
-			$toc_writer->endTag('navPoint');
-		}
+		$content_writer->emptyTag('item', 'href'=>"$chapter_folder_name/$img", 'media-type'=>"image/$img_type");
 	}
-	$index_text .="</p>";
+	$index_text .="</p>\n";
 }
 
 undef $source_dir;
 $index_text .="</body></html>";
+$toc_text .="</body></html>";
 $toc_writer->endTag('navMap');
 $toc_writer->endTag('ncx');
 $toc_writer->end();
@@ -126,8 +129,7 @@ $content_writer->emptyTag('itemref', 'idref'=>"index");
 $content_writer->endTag('spine');
 $content_writer->startTag('guide');
 $content_writer->emptyTag('reference', 'href'=>"cover.html", 'title'=>"Cover", 'type'=>"cover");
-#$content_writer->emptyTag('reference', 'href'=>"TOC.html", 'title'=>"Table Of Contents", 'type'=>"toc");
-#$content_writer->emptyTag('reference', 'href'=>"introduction.html", 'title'=>"Text", 'type'=>"text");
+#$content_writer->emptyTag('reference', 'href'=>"toc.html", 'title'=>"Table Of Contents", 'type'=>"toc");
 $content_writer->endTag('guide');
 $content_writer->endTag('package');
 $content_writer->end();
@@ -138,6 +140,8 @@ $string_member = $book->addString( $toc_writer->to_string(), 'toc.ncx' );
 $string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
 $string_member = $book->addString( $index_text, 'index.html' );
 $string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
+#$string_member = $book->addString( $toc_text, 'toc.html' );
+#$string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
 $string_member = $book->addString( "<html><body><img src=\"$cover_folder/$cover_file\"></body></html>", 'cover.html' );
 $string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
 

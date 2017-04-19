@@ -67,38 +67,41 @@ $content_writer->emptyTag('item', 'href'=>"toc.ncx", 'id'=>"ncx", 'media-type'=>
 
 
 my $index_text = "<html><head><title>$book_name</title></head><body>\n";
+my @chapters=();
 while (defined($_ = $source_dir->read)) {
 	if(/(.+)\.cbz$/) {
-		$chapter_counter++;
-		my $chapter_title=$1;
-		my $chapter_folder_name = sprintf("%04d", $chapter_counter);
-		my $chapter_cbz = Archive::Zip->new("$source_folder/$chapter_title.cbz");
-		$book->addDirectory($chapter_folder_name);
-		my @images = $chapter_cbz->memberNames();
-		my $image_counter = 0;
-		print "$chapter_title\n";
-		foreach my $img(sort @images) {
-			$cover_file = "$chapter_title.cbz/$img" if(! $cover_file);
-			$image_counter++;
-			$index_text .= "<p id=\"img${chapter_folder_name}x$image_counter\"><img src=\"$chapter_folder_name/$img\">\n";
-			my $data = $chapter_cbz->contents($img);
-			$book->addString($data, "$chapter_folder_name/$img", COMPRESSION_LEVEL_BEST_COMPRESSION);
-			$img =~ /\.(.+)$/;
-			my $img_type='jpeg';
-			$img_type = 'png' if($1 eq 'png');
-			$content_writer->emptyTag('item', 'href'=>"$chapter_folder_name/$img", 'id'=>"img${chapter_counter}x${image_counter}", 'media-type'=>"image/$img_type");
-
+		push @chapters, $1;
+	}
+}
+foreach my $chapter_title (sort @chapters) {
+	$chapter_counter++;
+	my $chapter_folder_name = sprintf("%04d", $chapter_counter);
+	my $chapter_cbz = Archive::Zip->new("$source_folder/$chapter_title.cbz");
+	$book->addDirectory($chapter_folder_name);
+	my @images = $chapter_cbz->memberNames();
+	my $image_counter = 0;
+	print "$chapter_title\n";
+	foreach my $img(sort @images) {
+		$cover_file = "$chapter_title.cbz/$img" if(! $cover_file);
+		$image_counter++;
+		$index_text .= "<p id=\"img${chapter_folder_name}x$image_counter\"><img src=\"$chapter_folder_name/$img\">\n";
+		my $data = $chapter_cbz->contents($img);
+		$book->addString($data, "$chapter_folder_name/$img", COMPRESSION_LEVEL_BEST_COMPRESSION);
+		$img =~ /\.(.+)$/;
+		my $img_type='jpeg';
+		$img_type = 'png' if($1 eq 'png');
+		$content_writer->emptyTag('item', 'href'=>"$chapter_folder_name/$img", 'id'=>"img${chapter_counter}x${image_counter}", 'media-type'=>"image/$img_type");
 			if($image_counter==1) {
-				$toc_writer->startTag('navPoint', 'class'=>"chapter", 'id'=>"num_$chapter_counter", 'playOrder'=>"$chapter_counter");
-				$toc_writer->startTag('navLabel');
-				$toc_writer->dataElement('text'=>$chapter_title);
-				$toc_writer->endTag('navLabel');
-				$toc_writer->emptyTag('content', 'src'=>"index.html#img${chapter_folder_name}x1");
-				$toc_writer->endTag('navPoint');
-			}
+			$toc_writer->startTag('navPoint', 'class'=>"chapter", 'id'=>"num_$chapter_counter", 'playOrder'=>"$chapter_counter");
+			$toc_writer->startTag('navLabel');
+			$toc_writer->dataElement('text'=>$chapter_title);
+			$toc_writer->endTag('navLabel');
+			$toc_writer->emptyTag('content', 'src'=>"index.html#img${chapter_folder_name}x1");
+			$toc_writer->endTag('navPoint');
 		}
 	}
 }
+
 undef $source_dir;
 $index_text .="</body></html>";
 $toc_writer->endTag('navMap');

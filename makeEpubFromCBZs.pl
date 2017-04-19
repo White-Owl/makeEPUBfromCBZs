@@ -7,12 +7,12 @@ use IO::Dir;
 use XML::Writer;
 
 my $book_description = $ARGV[0];
-my ($book_name, $book_author, $cover_file, $source_folder, $introduction);
+my ($book_name, $book_author, $cover_folder, $cover_file, $source_folder, $introduction);
 open(F, "<$book_description") || die;
 while(<F>) {
 	$book_name = $1 if(/^name=(.+)/);
 	$book_author = $1 if(/^author=(.+)/);
-	$cover_file = $1 if(/^cover=(.+)/);
+	($cover_folder, $cover_file) = ($1, $2) if(/^cover=(.+)\/(.+)/);
 	$source_folder = $1 if(/^chapters=(.+)/);
 	$introduction = $1 if(/^intro=(.+)/);
 }
@@ -56,10 +56,11 @@ $content_writer->startTag('package', 'xmlns'=>"http://www.idpf.org/2007/opf", 'u
 $content_writer->startTag('metadata', 'xmlns:dc'=>"http://purl.org/dc/elements/1.1/", 'xmlns:opf'=>"http://www.idpf.org/2007/opf");
 $content_writer->dataElement('dc:title', $book_name);
 $content_writer->dataElement('dc:creator', $book_author, 'opf:file-as'=>$book_author, 'opf:role'=>"aut");
+$content_writer->dataElement('dc:description', $introduction);
 $content_writer->emptyTag('meta', 'name'=>"cover", 'content'=>"cover");
 $content_writer->endTag('metadata');
 $content_writer->startTag('manifest');
-$content_writer->emptyTag('item', 'href'=>"cover.jpeg", 'id'=>"cover", 'media-type'=>"image/jpeg");
+$content_writer->emptyTag('item', 'href'=>"cover.html", 'id'=>"cover", 'media-type'=>"application/xhtml+xml");
 $content_writer->emptyTag('item', 'href'=>"index.html", 'id'=>"index", 'media-type'=>"application/xhtml+xml");
 #$content_writer->emptyTag('item', 'href'=>"titlepage.html", 'id'=>"titlepage", 'media-type'=>"application/xhtml+xml");
 $content_writer->emptyTag('item', 'href'=>"toc.ncx", 'id'=>"ncx", 'media-type'=>"application/x-dtbncx+xml");
@@ -78,13 +79,19 @@ foreach my $chapter_title (sort @chapters) {
 	my $chapter_folder_name = sprintf("%04d", $chapter_counter);
 	my $chapter_cbz = Archive::Zip->new("$source_folder/$chapter_title.cbz");
 	$book->addDirectory($chapter_folder_name);
-	my @images = $chapter_cbz->memberNames();
+	my @images = sort $chapter_cbz->memberNames();
+	if ( $cover_folder eq "$chapter_title.cbz") {
+		$cover_folder = $chapter_folder_name ;
+	} elsif(! $cover_file) {
+		$cover_file = $images[0];
+		$cover_folder = $chapter_folder_name;
+	}
+	$index_text .="<p>";
 	my $image_counter = 0;
 	print "$chapter_title\n";
-	foreach my $img(sort @images) {
-		$cover_file = "$chapter_title.cbz/$img" if(! $cover_file);
+	foreach my $img (@images) {
 		$image_counter++;
-		$index_text .= "<p id=\"img${chapter_folder_name}x$image_counter\"><img src=\"$chapter_folder_name/$img\">\n";
+		$index_text .= "<img src=\"$chapter_folder_name/$img\" id=\"img${chapter_folder_name}x$image_counter\"><br>\n";
 		my $data = $chapter_cbz->contents($img);
 		$book->addString($data, "$chapter_folder_name/$img", COMPRESSION_LEVEL_BEST_COMPRESSION);
 		$img =~ /\.(.+)$/;
@@ -100,6 +107,7 @@ foreach my $chapter_title (sort @chapters) {
 			$toc_writer->endTag('navPoint');
 		}
 	}
+	$index_text .="</p>";
 }
 
 undef $source_dir;
@@ -117,24 +125,21 @@ $content_writer->emptyTag('itemref', 'idref'=>"cover");
 $content_writer->emptyTag('itemref', 'idref'=>"index");
 $content_writer->endTag('spine');
 $content_writer->startTag('guide');
-$content_writer->emptyTag('reference', 'href'=>"cover.jpg", 'title'=>"Cover", 'type'=>"cover");
+$content_writer->emptyTag('reference', 'href'=>"cover.html", 'title'=>"Cover", 'type'=>"cover");
 #$content_writer->emptyTag('reference', 'href'=>"TOC.html", 'title'=>"Table Of Contents", 'type'=>"toc");
 #$content_writer->emptyTag('reference', 'href'=>"introduction.html", 'title'=>"Text", 'type'=>"text");
 $content_writer->endTag('guide');
 $content_writer->endTag('package');
 $content_writer->end();
 
-$string_member = $book->addString( $index_text, 'index.html' );
-$string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
 $string_member = $book->addString( $content_writer->to_string(), 'content.opf' );
 $string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
 $string_member = $book->addString( $toc_writer->to_string(), 'toc.ncx' );
 $string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
-
-$cover_file =~ /(.+)\/(.+)/;
-my $chapter_cbz = Archive::Zip->new("$source_folder/$1");
-my $data = $chapter_cbz->contents($2);
-$book->addString($data, "cover.jpeg", COMPRESSION_LEVEL_BEST_COMPRESSION);
+$string_member = $book->addString( $index_text, 'index.html' );
+$string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
+$string_member = $book->addString( "<html><body><img src=\"$cover_folder/$cover_file\"></body></html>", 'cover.html' );
+$string_member->desiredCompressionMethod( COMPRESSION_DEFLATED );
 
 
 # Save the Zip file

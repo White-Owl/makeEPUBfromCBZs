@@ -6,7 +6,9 @@ If you have a bunch of CBZ files in a format:
   ...etc
 ```
 This tool (with a help of small text file) with combine all CBZs into one EPUB file.
-The usage:
+
+
+## Usage:
 ```
   perl makeEpubFromCBZs.pl book_description.txt
 ```
